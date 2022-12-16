@@ -5,36 +5,56 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
 func main() {
-	lines, err := readLines("example.txt")
+	lines, err := readLines("input.txt")
 	if err != nil {
 		log.Fatalf("Failed to read input file: %s", err)
 	}
 
 	// Part 1
 	solutionPart1 := solvePart1(lines)
-	fmt.Printf("Solution for part 1 is %d\n", solutionPart1)
+	fmt.Printf("Solution for part 1 is %s\n", solutionPart1)
 
 	// Part 2
 	solutionPart2 := solvePart2(lines)
-	fmt.Printf("Solution for part 2 is %d\n", solutionPart2)
+	fmt.Printf("Solution for part 2 is %s\n", solutionPart2)
 }
 
-func solvePart1(lines []string) int {
+func solvePart1(lines []string) string {
 	stacksOfCratesLines, instructions := parseInput(lines)
 	stacksOfCrates := identifyStacks(stacksOfCratesLines)
-	executeInstructions(&stacksOfCrates, instructions)
+	stacksOfCrates = executeInstructions(stacksOfCrates, instructions, false)
 
-	fmt.Printf("%v", stacksOfCrates)
+	// Get top crates from each stack
+	result := ""
+	for i := 1; i <= len(stacksOfCrates); i++ {
+		stack := stacksOfCrates[i]
+		crate, _ := stack.Pop()
+		result += crate
+	}
 
-	return 0
+	return result
 }
 
-func solvePart2(lines []string) int {
-	return 0
+func solvePart2(lines []string) string {
+	stacksOfCratesLines, instructions := parseInput(lines)
+	stacksOfCrates := identifyStacks(stacksOfCratesLines)
+	stacksOfCrates = executeInstructions(stacksOfCrates, instructions, true)
+
+	// Get top crates from each stack
+	result := ""
+	for i := 1; i <= len(stacksOfCrates); i++ {
+		stack := stacksOfCrates[i]
+		crate, _ := stack.Pop()
+		result += crate
+	}
+
+	return result
 }
 
 func parseInput(lines []string) ([]string, []string) {
@@ -72,27 +92,50 @@ func identifyStacks(stacksOfCratesLines []string) map[int]Stack {
 	return stacksOfCrates
 }
 
-func executeInstructions(p *map[int]Stack, instructions []string) {
-	stackOfCrates := *p
-
+func executeInstructions(stackOfCrates map[int]Stack, instructions []string, retainOrder bool) map[int]Stack {
 	for _, instruction := range instructions {
-		fmt.Printf("Before executing instruction '%v': %v\n", instruction, stackOfCrates)
 
-		moveCount := convertRuneToDigit(rune(instruction[5]))
-		fromIndex := convertRuneToDigit(rune(instruction[12]))
-		toIndex := convertRuneToDigit(rune(instruction[17]))
+		re := regexp.MustCompile(`\d+`)
+		numbers := re.FindAllString(instruction, 3)
 
+		moveCount, _ := strconv.Atoi(numbers[0])
+		fromIndex, _ := strconv.Atoi(numbers[1])
+		toIndex, _ := strconv.Atoi(numbers[2])
+
+		tmpStack := make(Stack, 0)
 		for i := 0; i < moveCount; i++ {
 			fromStack := stackOfCrates[fromIndex]
 			toStack := stackOfCrates[toIndex]
-			movingCrate, _ := fromStack.Pop()
-			toStack.Push(movingCrate)
+			movingCrate, success := fromStack.Pop()
+			if success {
+				if !retainOrder {
+					toStack.Push(movingCrate)
+				} else {
+					// If we want to retain order, use intermediary stack to "invert order twice" ! See Hanoi tower
+					tmpStack.Push(movingCrate)
+				}
+			}
 
-			fmt.Printf("Moved %v from %v to %v\n", movingCrate, fromIndex, toIndex)
+			// Reassigning the modified values
+			stackOfCrates[fromIndex] = fromStack
+			if !retainOrder {
+				stackOfCrates[toIndex] = toStack
+			}
 		}
 
-		fmt.Printf("After executing: %v\n", stackOfCrates)
+		if retainOrder {
+			toStack := stackOfCrates[toIndex]
+			// Save the length in a var otherwise it changes as the loop goes on...
+			tmpLength := len(tmpStack)
+			for i := 0; i < tmpLength; i++ {
+				movingCrate, _ := tmpStack.Pop()
+				toStack.Push(movingCrate)
+			}
+			stackOfCrates[toIndex] = toStack
+		}
 	}
+
+	return stackOfCrates
 }
 
 func convertRuneToDigit(r rune) int {
